@@ -1182,7 +1182,7 @@ int main (int argc, char* argv[])
           skip_comments        = true;
           input_header         = output_header = true;
           missing_field_filler = "-";
-          in_tab               = ' ';
+          in_tab               = TAB_WHITESPACE;
           out_tab              = ' ';
           vnlog                = true;
           break;
