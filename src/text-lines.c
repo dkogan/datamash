@@ -34,6 +34,7 @@
 
 #include "text-options.h"
 #include "text-lines.h"
+#include "die.h"
 
 void
 line_record_init (struct line_record_t* lr)
@@ -91,12 +92,19 @@ line_record_reserve_fields (struct line_record_t* lr, const size_t n)
 }
 
 static void
-line_record_parse_fields (struct line_record_t *lr, int field_delim)
+line_record_parse_fields (/* The buffer. May or may not be the one in the
+                             following argument */
+                          const struct linebuffer* lbuf,
+
+                          /* Used ONLY for the fields. The buffer is picked up
+                             from the above argument */
+                          struct line_record_t *lr,
+                          int field_delim)
 {
   size_t num_fields = 0;
   size_t pos = 0;
-  const size_t buflen = line_record_length (lr);
-  const char* fptr = line_record_buffer (lr);
+  const size_t buflen = lbuf->length;
+  const char*  fptr   = lbuf->buffer;
 
   /* Move 'fptr' to point to the beginning of 'field' */
   if (field_delim != TAB_WHITESPACE)
@@ -157,31 +165,89 @@ line_record_parse_fields (struct line_record_t *lr, int field_delim)
 }
 
 
-static bool
-line_record_is_comment (const struct line_record_t* lr)
+// returns 0 if not a comment, 1 if a single comment, 2 if a double comment
+static int
+line_comment_count (const struct line_record_t* lr)
 {
   const char* pch = line_record_buffer (lr);
 
   /* Skip white space at beginning of line */
   size_t s = strspn (pch, " \t");
   /* First non-whitespace character */
-  char c = pch[s];
-  return (c=='#' || c==';');
+  const char* c = &pch[s];
+  if (!(c[0]=='#' || c[0]==';'))
+      // not any comment
+      return 0;
+  if(c[0] == '\0')
+      return 1;
+  if( c[0] == '#' && (c[1] == '#' || c[1] == '!') )
+      return 2;
+  if( c[0] == ';' && c[1] == ';')
+      return 2;
+  return 1;
+}
+
+static bool
+_line_record_fread (struct /* in/out */ line_record_t* lr,
+                    FILE *stream, char delimiter,
+                    bool skip_single_comments,
+                    bool vnlog_prologue)
+{
+  while(1) {
+    if (readlinebuffer_delim (&lr->lbuf, stream, delimiter) == 0)
+      return false;
+    linebuffer_nullify (&lr->lbuf);
+    int comment_count = line_comment_count (lr);
+    if( skip_single_comments && comment_count>=1)
+        continue;
+    if( vnlog_prologue )
+    {
+        // I skip double-comments
+        //
+        // I read single-commented lines that have anything following the single
+        // comment character. And I strip out the comment character
+        //
+        // I barf on anything else. No data before the header allowed
+        if( comment_count >= 2 )
+            continue;
+        if( comment_count == 1 )
+        {
+            // one comment. I need to strip the comment characters. Skip leading
+            // regex '^\s*#\s*'
+            const char* pch = line_record_buffer (lr);
+            size_t s = strspn (pch, " \t#");
+            struct linebuffer lbuf = lr->lbuf;
+            lbuf.buffer += s;
+            lbuf.length -= s;
+            if(lbuf.buffer[0] == '\0')
+                // empty comment line. ignore.
+                continue;
+            line_record_parse_fields (&lbuf, lr, in_tab);
+            return true;
+        }
+        // No comment. This is an illegal data line. Barf.
+        die (EXIT_FAILURE, 0, _("invalid vnlog data: received data line prior to the header: '%s'"),
+             line_record_buffer (lr));
+
+    }
+    break;
+  }
+
+  line_record_parse_fields (&lr->lbuf, lr, in_tab);
+  return true;
 }
 
 bool
 line_record_fread (struct /* in/out */ line_record_t* lr,
-                  FILE *stream, char delimiter, bool skip_comments)
+                   FILE *stream, char delimiter, bool skip_comments)
 {
-  do {
-    if (readlinebuffer_delim (&lr->lbuf, stream, delimiter) == 0)
-      return false;
-    linebuffer_nullify (&lr->lbuf);
-  } while (skip_comments && line_record_is_comment (lr));
-
-
-  line_record_parse_fields (lr, in_tab);
-  return true;
+    return _line_record_fread(lr, stream, delimiter, skip_comments, false);
+}
+bool
+line_record_fread_vnlog_prologue (struct /* in/out */ line_record_t* lr,
+                                  FILE *stream, char delimiter)
+{
+    return _line_record_fread(lr, stream, delimiter, false, true);
 }
 
 void

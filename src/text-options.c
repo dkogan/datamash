@@ -68,6 +68,8 @@ char* missing_field_filler = "N/A";
    followed by '#' or ';'. See line_record_is_comment.  */
 bool skip_comments = false;
 
+bool vnlog = false;
+
 #define UCHAR_LIM (UCHAR_MAX + 1)
 bool blanks[UCHAR_LIM];
 
