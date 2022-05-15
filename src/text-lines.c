@@ -175,16 +175,34 @@ line_comment_count (const struct line_record_t* lr)
   size_t s = strspn (pch, " \t");
   /* First non-whitespace character */
   const char* c = &pch[s];
-  if (!(c[0]=='#' || c[0]==';'))
-      // not any comment
-      return 0;
-  if(c[0] == '\0')
-      return 1;
-  if( c[0] == '#' && (c[1] == '#' || c[1] == '!') )
-      return 2;
-  if( c[0] == ';' && c[1] == ';')
-      return 2;
-  return 1;
+
+  // Comments use the # character. If !vnlog, they can also use ;
+  if(!vnlog)
+  {
+      if (c[0] == '#' || c[0] == ';')
+      {
+          // Have at least a single comment
+          if (c[1] == '#' || c[1] == ';')
+              return 2;
+          else
+              return 1;
+      }
+      else
+          return 0;
+  }
+  else
+  {
+      if (c[0] == '#')
+      {
+          // Have at least a single comment
+          if (c[1] == '#')
+              return 2;
+          else
+              return 1;
+      }
+      else
+          return 0;
+  }
 }
 
 static bool
