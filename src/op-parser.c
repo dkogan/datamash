@@ -31,6 +31,7 @@
 #include "op-parser.h"
 #include "utils.h"
 #include "field-ops.h"
+#include "text-options.h"
 
 static struct datamash_ops *dm = NULL;
 
@@ -261,6 +262,10 @@ parse_simple_operation_column (struct parser_field_t /*OUTPUT*/ *p,
 {
   assert (p);                                    /* LCOV_EXCL_LINE */
   enum TOKEN tok = scanner_get_token ();
+
+  if( input_header && tok == TOK_INTEGER)
+      tok = TOK_IDENTIFIER;
+
   switch (tok)                                   /* LCOV_EXCL_BR */
     {
     case TOK_IDENTIFIER:
@@ -540,6 +545,10 @@ static void
 parse_mode_column (enum processing_mode pm)
 {
   enum TOKEN tok = scanner_get_token ();
+
+  if( input_header && tok == TOK_INTEGER)
+      tok = TOK_IDENTIFIER;
+
   switch (tok)                                   /* LCOV_EXCL_BR */
     {
     case TOK_IDENTIFIER:
