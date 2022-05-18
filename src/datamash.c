@@ -75,12 +75,6 @@ static size_t line_number = 0 ;
 /* Lines in the current group */
 static size_t lines_in_group = 0 ;
 
-/* Print Output Header */
-static bool output_header = false;
-
-/* Input file has a header line */
-static bool input_header = false;
-
 /* If true, print the entire input line. Otherwise, print only the key fields */
 static bool print_full_line = false;
 
@@ -120,7 +114,7 @@ enum
   UNDOC_RMDUP_TEST
 };
 
-static char const short_options[] = "sfF:izg:t:HWR:Cc:";
+static char const short_options[] = "sfF:izg:t:HWR:Cc:v";
 
 static struct option const long_options[] =
 {
@@ -133,6 +127,7 @@ static struct option const long_options[] =
   {"header-in", no_argument, NULL, INPUT_HEADER_OPTION},
   {"header-out", no_argument, NULL, OUTPUT_HEADER_OPTION},
   {"headers", no_argument, NULL, 'H'},
+  {"vnlog", no_argument, NULL, 'v'},
   {"full", no_argument, NULL, 'f'},
   {"filler", required_argument, NULL, 'F'},
   {"format", required_argument, NULL, CUSTOM_FORMAT_OPTION},
@@ -464,6 +459,9 @@ print_input_line (const struct line_record_t* lb)
 static void
 print_column_headers ()
 {
+  if ( vnlog )
+      printf ("# ");
+
   if (print_full_line)
     {
       /* Print the headers of all the input fields */
@@ -551,7 +549,9 @@ process_input_header (FILE *stream)
   struct line_record_t lr;
 
   line_record_init (&lr);
-  if (line_record_fread (&lr, stream, eolchar, skip_comments))
+
+  if ( (!vnlog && line_record_fread (&lr, stream, eolchar, skip_comments )) ||
+       ( vnlog && line_record_fread_vnlog_prologue (&lr, stream, eolchar )) )
     {
       build_input_line_headers (&lr, true);
       line_number++;
@@ -1012,7 +1012,8 @@ remove_dups_in_file ()
 
   if (input_header)
     {
-      if (line_record_fread (thisline, input_stream, eolchar, skip_comments))
+      if ( (!vnlog && line_record_fread (thisline, input_stream, eolchar, skip_comments )) ||
+           ( vnlog && line_record_fread_vnlog_prologue (thisline, input_stream, eolchar )) )
         {
           line_number++;
 
@@ -1256,6 +1257,15 @@ int main (int argc, char* argv[])
 
         case 'i':
           case_sensitive = false;
+          break;
+
+        case 'v':
+          skip_comments        = true;
+          input_header         = output_header = true;
+          missing_field_filler = "-";
+          in_tab               = TAB_WHITESPACE;
+          out_tab              = ' ';
+          vnlog                = true;
           break;
 
         case 'z':

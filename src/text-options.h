@@ -68,6 +68,14 @@ extern char* missing_field_filler;
    followed by '#' or ';'. See line_record_is_comment.  */
 extern bool skip_comments;
 
+extern bool vnlog;
+
+/* Print Output Header */
+extern bool output_header;
+
+/* Input file has a header line */
+extern bool input_header;
+
 #define UCHAR_LIM (UCHAR_MAX + 1)
 extern bool blanks[UCHAR_LIM];
 

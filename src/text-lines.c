@@ -34,6 +34,7 @@
 
 #include "text-options.h"
 #include "text-lines.h"
+#include "die.h"
 
 void
 line_record_init (struct line_record_t* lr)
@@ -91,21 +92,31 @@ line_record_reserve_fields (struct line_record_t* lr, const size_t n)
 }
 
 static void
-line_record_parse_fields (struct line_record_t *lr, int field_delim)
+line_record_parse_fields (/* The buffer. May or may not be the one in the
+                             following argument */
+                          const struct linebuffer* lbuf,
+
+                          /* Used ONLY for the fields. The buffer is picked up
+                             from the above argument */
+                          struct line_record_t *lr,
+                          int field_delim,
+                          bool skip_comments)
 {
   size_t num_fields = 0;
   size_t pos = 0;
-  const size_t buflen = line_record_length (lr);
-  const char* fptr = line_record_buffer (lr);
+  const size_t buflen = lbuf->length;
+  const char*  fptr   = lbuf->buffer;
+
+#define IS_COMMENT (skip_comments && (*fptr == '#' || *fptr == ';'))
 
   /* Move 'fptr' to point to the beginning of 'field' */
   if (field_delim != TAB_WHITESPACE)
     {
-      while (buflen && pos<=buflen)
+      while (buflen && pos<=buflen && !IS_COMMENT)
         {
           /* scan buffer until next delimiter */
           const char* field_beg = fptr;
-          while ( (pos<buflen) && (*fptr != field_delim))
+          while ( (pos<buflen && !IS_COMMENT) && (*fptr != field_delim))
             {
               ++fptr;
               ++pos;
@@ -117,6 +128,9 @@ line_record_parse_fields (struct line_record_t *lr, int field_delim)
           lr->fields[num_fields].len = fptr - field_beg;
           ++num_fields;
 
+          if(IS_COMMENT)
+              pos = buflen;
+
           /* Skip the delimiter */
           ++pos;
           ++fptr;
@@ -127,10 +141,10 @@ line_record_parse_fields (struct line_record_t *lr, int field_delim)
     {
       /* delimiter is white-space transition
          (multiple whitespaces are one delimiter) */
-      while (pos<buflen)
+      while (pos<buflen && !IS_COMMENT)
         {
           /* Skip leading whitespace */
-          while ( (pos<buflen) && blanks[to_uchar (*fptr)])
+          while ( (pos<buflen && !IS_COMMENT) && blanks[to_uchar (*fptr)])
             {
               ++fptr;
               ++pos;
@@ -139,7 +153,7 @@ line_record_parse_fields (struct line_record_t *lr, int field_delim)
           /* Scan buffer until next whitespace */
           const char* field_beg = fptr;
           size_t flen = 0;
-          while ( (pos<buflen) && !blanks[to_uchar (*fptr)])
+          while ( (pos<buflen && !IS_COMMENT) && !blanks[to_uchar (*fptr)])
             {
               ++fptr;
               ++pos;
@@ -147,10 +161,13 @@ line_record_parse_fields (struct line_record_t *lr, int field_delim)
             }
 
           /* Add new field */
-          line_record_reserve_fields (lr, num_fields);
-          lr->fields[num_fields].buf = field_beg;
-          lr->fields[num_fields].len = flen;
-          ++num_fields;
+          if(flen > 0)
+          {
+              line_record_reserve_fields (lr, num_fields);
+              lr->fields[num_fields].buf = field_beg;
+              lr->fields[num_fields].len = flen;
+              ++num_fields;
+          }
         }
       lr->num_fields = num_fields;
     }
@@ -169,19 +186,104 @@ line_record_is_comment (const struct line_record_t* lr)
   return (c=='#' || c==';');
 }
 
-bool
-line_record_fread (struct /* in/out */ line_record_t* lr,
-                  FILE *stream, char delimiter, bool skip_comments)
+// returns 0 if not a comment, 1 if a single comment, 2 if a double comment or
+// if the line only contains whitespace or is empty. Used only for vnlog
+// processing
+static int
+line_leading_comment_count (const struct line_record_t* lr)
 {
-  do {
+  const char* pch = line_record_buffer (lr);
+
+  /* Skip white space at beginning of line */
+  size_t s = strspn (pch, " \t");
+  /* First non-whitespace character */
+  const char* c = &pch[s];
+
+  // empty line?
+  if (c[0] == '\0')
+      return 2;
+
+  // not a comment?
+  if (c[0] != '#')
+      return 0;
+
+  // Have at least a single comment
+  if (c[1] == '#' || c[1] == '!')
+      return 2;
+  else
+      return 1;
+}
+
+static bool
+_line_record_fread (struct /* in/out */ line_record_t* lr,
+                    FILE *stream, char delimiter,
+                    bool skip_comments,
+                    bool vnlog_prologue)
+{
+  while(1) {
     if (readlinebuffer_delim (&lr->lbuf, stream, delimiter) == 0)
       return false;
     linebuffer_nullify (&lr->lbuf);
-  } while (skip_comments && line_record_is_comment (lr));
 
+    if( vnlog )
+    {
+        if( vnlog_prologue )
+        {
+            // I skip double-comments and empty lines. Single-commented are my vnlog
+            // header. I barf on anything else: no data before the header allowed
+            int leading_comment_count = line_leading_comment_count (lr);
+            if( leading_comment_count >= 2 )
+                continue;
+            if( leading_comment_count == 1 )
+            {
+                // one comment. I need to strip the comment characters. Skip leading
+                // regex '^\s*#\s*'
+                const char* pch = line_record_buffer (lr);
+                size_t s = strspn (pch, " \t#");
+                struct linebuffer lbuf = lr->lbuf;
+                lbuf.buffer += s;
+                lbuf.length -= s;
+                if(lbuf.buffer[0] == '\0')
+                    // empty comment line. ignore.
+                    continue;
+                line_record_parse_fields (&lbuf, lr, in_tab, false);
+                return true;
+            }
 
-  line_record_parse_fields (lr, in_tab);
+            die (EXIT_FAILURE, 0, _("invalid vnlog data: received data line prior to the header: '%s'"),
+                 line_record_buffer (lr));
+        }
+
+        // vnlog data. Skip comments and empty lines
+        const char* pch = line_record_buffer (lr);
+        size_t s = strspn (pch, " \t");
+        char c = pch[s];
+        if (c=='#' || c=='\0')
+            continue;
+        break;
+    }
+
+    if( skip_comments && line_record_is_comment (lr))
+        continue;
+
+    break;
+  }
+
+  line_record_parse_fields (&lr->lbuf, lr, in_tab, skip_comments);
   return true;
+}
+
+bool
+line_record_fread (struct /* in/out */ line_record_t* lr,
+                   FILE *stream, char delimiter, bool skip_comments)
+{
+    return _line_record_fread(lr, stream, delimiter, skip_comments, false);
+}
+bool
+line_record_fread_vnlog_prologue (struct /* in/out */ line_record_t* lr,
+                                  FILE *stream, char delimiter)
+{
+    return _line_record_fread(lr, stream, delimiter, skip_comments, true);
 }
 
 void
