@@ -1381,6 +1381,34 @@ int main (int argc, char* argv[])
     die (EXIT_FAILURE, 0,
            _("-H or --header-in must be used with named columns"));
 
+  if(vnlog)
+  {
+      if(!skip_comments)
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always skips comments"));
+      if(!input_header)
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always reads field labels"));
+      if(!output_header)
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always reads field labels"));
+      if(0 != strcmp(missing_field_filler, "-"))
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always uses '-' for empty fields"));
+      if(in_tab != TAB_WHITESPACE)
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always uses whitespace to separate input fields"));
+      if(out_tab != ' ')
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always uses ' ' to separate output fields"));
+      if(explicit_output_delimiter != -1)
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always uses the default output delimiter"));
+      if(eolchar != '\n')
+          die (EXIT_FAILURE, 0,
+               _("vnlog processing always uses '\\n' to terminate output lines"));
+  }
+
   open_input ();
   switch (dm->mode)                              /* LCOV_EXCL_BR_LINE */
     {
