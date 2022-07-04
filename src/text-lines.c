@@ -100,7 +100,7 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
                              from the above argument */
                           struct line_record_t *lr,
                           int field_delim,
-                          bool skip_comments,
+                          bool ignore_trailing_comments,
                           bool ignore_trailing_whitespace)
 {
   size_t num_fields = 0;
@@ -108,16 +108,16 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
   const size_t buflen = lbuf->length;
   const char*  fptr   = lbuf->buffer;
 
-#define IS_COMMENT (skip_comments && (*fptr == '#' || *fptr == ';'))
+#define IS_TRAILING_COMMENT (ignore_trailing_comments && (*fptr == '#' || *fptr == ';'))
 
   /* Move 'fptr' to point to the beginning of 'field' */
   if (field_delim != TAB_WHITESPACE)
     {
-      while (buflen && pos<=buflen && !IS_COMMENT)
+      while (buflen && pos<=buflen && !IS_TRAILING_COMMENT)
         {
           /* scan buffer until next delimiter */
           const char* field_beg = fptr;
-          while ( (pos<buflen && !IS_COMMENT) && (*fptr != field_delim))
+          while ( (pos<buflen && !IS_TRAILING_COMMENT) && (*fptr != field_delim))
             {
               ++fptr;
               ++pos;
@@ -129,7 +129,7 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
           lr->fields[num_fields].len = fptr - field_beg;
           ++num_fields;
 
-          if(IS_COMMENT)
+          if(IS_TRAILING_COMMENT)
               pos = buflen;
 
           /* Skip the delimiter */
@@ -142,10 +142,10 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
     {
       /* delimiter is white-space transition
          (multiple whitespaces are one delimiter) */
-      while (pos<buflen && !IS_COMMENT)
+      while (pos<buflen && !IS_TRAILING_COMMENT)
         {
           /* Skip leading whitespace */
-          while ( (pos<buflen && !IS_COMMENT) && blanks[to_uchar (*fptr)])
+          while ( (pos<buflen && !IS_TRAILING_COMMENT) && blanks[to_uchar (*fptr)])
             {
               ++fptr;
               ++pos;
@@ -154,7 +154,7 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
           /* Scan buffer until next whitespace */
           const char* field_beg = fptr;
           size_t flen = 0;
-          while ( (pos<buflen && !IS_COMMENT) && !blanks[to_uchar (*fptr)])
+          while ( (pos<buflen && !IS_TRAILING_COMMENT) && !blanks[to_uchar (*fptr)])
             {
               ++fptr;
               ++pos;
