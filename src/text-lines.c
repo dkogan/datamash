@@ -100,7 +100,8 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
                              from the above argument */
                           struct line_record_t *lr,
                           int field_delim,
-                          bool skip_comments)
+                          bool skip_comments,
+                          bool ignore_trailing_whitespace)
 {
   size_t num_fields = 0;
   size_t pos = 0;
@@ -161,7 +162,7 @@ line_record_parse_fields (/* The buffer. May or may not be the one in the
             }
 
           /* Add new field */
-          if(flen > 0)
+          if(!ignore_trailing_whitespace || flen > 0)
           {
               line_record_reserve_fields (lr, num_fields);
               lr->fields[num_fields].buf = field_beg;
@@ -246,7 +247,15 @@ _line_record_fread (struct /* in/out */ line_record_t* lr,
                 if(lbuf.buffer[0] == '\0')
                     // empty comment line. ignore.
                     continue;
-                line_record_parse_fields (&lbuf, lr, in_tab, false);
+                line_record_parse_fields (&lbuf, lr, in_tab,
+
+                                          // do NOT ignore comments. We're
+                                          // parsing the prologue
+                                          false,
+
+                                          // ignore trailing whitespace
+                                          true
+                                          );
                 return true;
             }
 
@@ -269,7 +278,12 @@ _line_record_fread (struct /* in/out */ line_record_t* lr,
     break;
   }
 
-  line_record_parse_fields (&lr->lbuf, lr, in_tab, skip_comments);
+  line_record_parse_fields (&lr->lbuf, lr, in_tab,
+                            // Ignore trailing comments only if --vnlog
+                            vnlog && skip_comments,
+
+                            // ignore trailing whitespace only if --vnlog
+                            vnlog);
   return true;
 }
 
