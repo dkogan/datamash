@@ -263,7 +263,7 @@ parse_simple_operation_column (struct parser_field_t /*OUTPUT*/ *p,
   assert (p);                                    /* LCOV_EXCL_LINE */
   enum TOKEN tok = scanner_get_token ();
 
-  if( input_header && tok == TOK_INTEGER)
+  if( vnlog && tok == TOK_INTEGER)
       tok = TOK_IDENTIFIER;
 
   switch (tok)                                   /* LCOV_EXCL_BR */
@@ -546,7 +546,7 @@ parse_mode_column (enum processing_mode pm)
 {
   enum TOKEN tok = scanner_get_token ();
 
-  if( input_header && tok == TOK_INTEGER)
+  if( vnlog && tok == TOK_INTEGER)
       tok = TOK_IDENTIFIER;
 
   switch (tok)                                   /* LCOV_EXCL_BR */
