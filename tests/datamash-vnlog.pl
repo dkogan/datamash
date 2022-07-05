@@ -207,6 +207,27 @@ EOF
 EOF
 }],
 
+    ['rmdup-x',
+     '-v rmdup x',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+#x y z
+4 2 3
+- 8 9
+EOF
+}],
+
+    ['rmdup-y',
+     '-v rmdup y',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+#x y z
+4 2 3
+4 - 6# comment
+- 8 9
+EOF
+}],
+
     # empty input = empty output
     [ 'empty1',
       '-v count x',
