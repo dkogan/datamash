@@ -50,9 +50,9 @@ $prog = $prog_bin unless $prog;
 @ENV{qw(LANGUAGE LANG LC_ALL)} = ('C') x 3;
 
 
-# Now the tests. I check vnlog-specific things only
 
-my @Tests = (); # I will append to this list as I add tests
+
+
 my $in_basic = <<'EOF';
 #! comment
 ##comment
@@ -76,6 +76,19 @@ my $in_numeric_columns = <<'EOF';
 - 8 9
 EOF
 
+# trailing whitespace
+my $in_trailing_whitespace=<<'EOF';
+# x y
+bar	5
+bbb	4   
+EOF
+
+
+
+
+
+
+my @Tests = (); # I will append to this list as I add tests
 @Tests =
   ( @Tests,
 
@@ -88,6 +101,62 @@ EOF
 EOF
      }],
 
+    ['basic-check',
+     '-v check',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+3 lines, 3 fields
+EOF
+     }],
+
+    ['error-basic-unmatched-field',
+     '-v sum zzz',
+     {IN_PIPE => $in_basic},
+     {EXIT => 1},
+     {ERR  => "$prog: column name 'zzz' not found in input file\n"}],
+
+    # Make sure trailing whitespace is ignored properly
+    ['trailing-whitespace',
+     '-v check',
+     {IN_PIPE=>$in_trailing_whitespace},
+     {OUT     => <<'EOF'
+2 lines, 2 fields
+EOF
+     }],
+
+    # I kinda think this trailing-whitespace logic should apply to non-vnlog
+    # runs too, but the mailing list concensus was that it shouldn't. If that
+    # changes, here's the (commented-out) test that flags the questionable
+    # logic. To make it work, tweak line_record_parse_fields() to change
+    #
+    #   line_record_parse_fields (&lr->lbuf, lr, in_tab,
+    #                             // Ignore trailing comments only if --vnlog
+    #                             vnlog && skip_comments,
+    #                             // ignore trailing whitespace only if --vnlog
+    #                             vnlog);
+    # to
+    #   line_record_parse_fields (&lr->lbuf, lr, in_tab,
+    #                             // Ignore trailing comments only if --vnlog
+    #                             vnlog && skip_comments,
+    #                             // ignore trailing whitespace
+    #                             true);
+    # The disabled test:
+    #     ['trailing-whitespace-no-vnlog',
+    #      '-W -C check',
+    #      {IN_PIPE=>$in_trailing_whitespace},
+    #      {OUT     => <<'EOF'
+    # 2 lines, 2 fields
+    # EOF
+    #      }],
+
+    ['sum-requires-numeric-data',
+     '-v sum x',
+     {IN_PIPE => $in_basic},
+     {EXIT    => 1},
+     {OUT     => "# sum(x)\n" },
+     {ERR     => "$prog: invalid numeric value in line 4 field 1: '-'\n"}
+    ],
+
     ['unique',
      '-v unique x',
      {IN_PIPE => $in_basic},
@@ -97,20 +166,22 @@ EOF
 EOF
      }],
 
+    ['collapse',
+     '-v collapse x',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+# collapse(x)
+4,4,-
+EOF
+     }],
+
     ['need-data-before-legend',
      '-v sum z',
      {IN_PIPE => "5\n" . $in_basic},
      {EXIT    => 1},
      {ERR     => "$prog: invalid vnlog data: received data line prior to the header: '5'\n" }],
 
-    ['option-parsing1',
-     '-v -t: sum x',
-     {IN_PIPE => $in_basic},
-     {EXIT    => 1},
-     {ERR     => "$prog: vnlog processing always uses whitespace to separate input fields\n"}
-    ],
-
-    ['numeric-columns-no-allowed',
+    ['numeric-columns-not-allowed',
      '-v sum 1',
      {IN_PIPE => $in_basic},
      {EXIT    => 1},
@@ -137,15 +208,50 @@ EOF
 }],
 
     # empty input = empty output
-    [ 'emp1',
+    [ 'empty1',
       '-v count x',
       {IN_PIPE=>""},
       {ERR=>""}],
-    [ 'emp2',
+    [ 'empty2',
       '-v count x',
       {IN_PIPE=>"# x"},
       {OUT=>"# count(x)\n"}],
-  );
+
+    # various errors
+    [ 'error-groupby-unmatched-field',
+      '-v -g zzz sum z',
+      {IN_PIPE => $in_basic},
+      {EXIT => 1},
+      {ERR  => "$prog: column name 'zzz' not found in input file\n"} ],
+
+    [ 'error-sum-empty-field',
+      '-v sum ""',
+      {IN_PIPE => $in_basic},
+      {EXIT => 1},
+      {ERR  => "$prog: missing field for operation 'sum'\n"}],
+
+    [ 'error-groupby-missing-field',
+      '-v -g x,,y sum z',
+      {IN_PIPE => $in_basic},
+      {EXIT => 1},
+      {ERR  => "$prog: missing field for operation 'groupby'\n"}],
+
+    # Commandline errors
+    ['option-parsing-error1',
+     '-v -t: sum x',
+     {IN_PIPE => $in_basic},
+     {EXIT    => 1},
+     {ERR     => "$prog: vnlog processing always uses whitespace to separate input fields\n"}
+    ],
+
+    ['basic-check-no-op-options',
+     '-v -C --header-in --header-out check',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+3 lines, 3 fields
+EOF
+     }]
+);
 
 
 my $save_temps = $ENV{SAVE_TEMPS};
