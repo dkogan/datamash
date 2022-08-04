@@ -248,6 +248,10 @@ which require a pair of fields (e.g. 'pcov 2:6').\n"), stdout);
   -H, --headers             same as '--header-in --header-out'\n\
 "), stdout);
       fputs (_("\
+  -v, --vnlog               Reads and writes data in the vnlog format.\n\
+                              Implies -C -H -W\n\
+"), stdout);
+      fputs (_("\
   -i, --ignore-case         ignore upper/lower case when comparing text;\n\
                               this affects grouping, and string operations\n\
 "), stdout);
