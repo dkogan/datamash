@@ -1031,6 +1031,8 @@ remove_dups_in_file ()
 
           if (output_header)
             {
+              if(vnlog)
+                  fprintf(stdout, "# ");
               const size_t num_fields = line_record_num_fields (thisline);
               for (size_t i = 1 ; i <= num_fields ; ++i) {
                 if (i>1)
