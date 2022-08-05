@@ -803,7 +803,8 @@ reverse_fields_in_file ()
 
   while (true)
     {
-      if (!line_record_fread (thisline, input_stream, eolchar, skip_comments))
+      if ( !(((!vnlog || line_number >0) && line_record_fread (thisline, input_stream, eolchar, skip_comments )) ||
+             (( vnlog && line_number==0) && line_record_fread_vnlog_prologue (thisline, input_stream, eolchar )) ))
         break;
       line_number++;
 
@@ -820,6 +821,31 @@ reverse_fields_in_file ()
       prev_num_fields = num_fields;
 
       /* Special handling for header line */
+      if (vnlog && line_number == 1)
+        {
+          /* If using named-columns, find the column numbers after reading the
+             header line. */
+          build_input_line_headers (&lr, true);
+          group_columns_find_named_columns ();
+
+          fprintf(stdout, "# ");
+          const size_t num_fields = line_record_num_fields (thisline);
+          for (size_t i = num_fields ; i >= 1 ; --i) {
+            if (i<num_fields)
+              print_field_separator ();
+
+            const char *str;
+            size_t len;
+            if (line_record_get_field (thisline, i, &str, &len))
+            {
+              ignore_value (fwrite (str, len, sizeof (char), stdout));
+            }
+          }
+          print_line_separator ();
+
+          continue;
+        }
+
       if (line_number == 1)
         {
           /* If there is an header line (first line), and the user did not
