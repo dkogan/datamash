@@ -301,27 +301,6 @@ bar	5
 ;baz	7
 EOF
 
-# attached comment
-my $in_comments2=<<'EOF';
- #foo	3
-bar	5#xxx
-;baz	7
-EOF
-
-# trailing whitespace and attached comment
-my $in_comments3=<<'EOF';
- #foo	3
-bar	5# xxx
-bbb	4   
-;baz	7
-EOF
-
-# trailing whitespace
-my $in_trailing_whitespace=<<'EOF';
-bar	5
-bbb	4   
-EOF
-
 my $in_esc_ident=<<'EOF';
 A_Chlor_T1h_r1-metaG B 9C -bar
 1 2 3 4
@@ -597,29 +576,6 @@ my @Tests =
           "7	;baz\n"}],
   ['sc4', '-C reverse', {IN_PIPE=>$in_comments}, {OUT=>"5	bar\n"}],
 
-  # attached comment
-  ['sc5', 'sum 2',      {IN_PIPE=>$in_comments2}, {EXIT=>1}, {ERR=>"datamash: invalid numeric value in line 2 field 2: '5#xxx'\n"}],
-  ['sc6', '-C sum 2',   {IN_PIPE=>$in_comments2}, {OUT=>"5\n"}],
-  ['sc7', 'reverse',    {IN_PIPE=>$in_comments2},
-   {OUT=>"3	 #foo\n" .
-	 "5#xxx	bar\n" .
-	 "7	;baz\n"}],
-  ['sc8', '-C reverse', {IN_PIPE=>$in_comments2}, {OUT=>"5	bar\n"}],
-
-  # Test -C/--skip-comments option. Need to make sure we ignore full-line
-  # comments and partial comments. And that we treat trailing whitespace
-  # properly
-  ['sc9', '-C -W sum 2',   {IN_PIPE=>$in_comments3}, {OUT=>"9\n"}],
-  ['sc10', '-C -W reverse', {IN_PIPE=>$in_comments3},
-   {OUT=> "5	bar\n" .
-          "4	bbb\n" }],
-  ['sc11', '-C -W transpose', {IN_PIPE=>$in_trailing_whitespace},
-   {OUT=> <<'EOF'
-bar	bbb
-5	4
-EOF
-   }],
-
   # Regression tests
   # TODO: Move regression tests into a separate file when sufficiently many
   #       have accumulated to warrant the overhead of another test file.
@@ -720,6 +676,64 @@ EOF
   #['ifdl14', '-t. getnum 1,2',        {IN_PIPE=>"x1.2y\n"}, {OUT=>"1.2\n"}],
 
 );
+
+
+# In 2022/05 during the development of the vnlog support we discussed making -C
+# ignore trailing comments and making -W ignore trailing whitespace:
+#
+#   https://lists.gnu.org/archive/html/bug-datamash/2022-05/msg00027.html
+#
+# We decided to do those things only if --vnlog, so those tests are disabled
+# here. --vnlog has its own tests.
+if(0) {
+    # attached comment
+    my $in_comments2=<<'EOF';
+ #foo	3
+bar	5#xxx
+;baz	7
+EOF
+
+    # trailing whitespace and attached comment
+    my $in_comments3=<<'EOF';
+ #foo	3
+bar	5# xxx
+bbb	4   
+;baz	7
+EOF
+
+    # trailing whitespace
+    my $in_trailing_whitespace=<<'EOF';
+bar	5
+bbb	4   
+EOF
+
+    @Tests =
+      ( @Tests,
+        # attached comment
+        ['sc5', 'sum 2',      {IN_PIPE=>$in_comments2}, {EXIT=>1}, {ERR=>"datamash: invalid numeric value in line 2 field 2: '5#xxx'\n"}],
+        ['sc6', '-C sum 2',   {IN_PIPE=>$in_comments2}, {OUT=>"5\n"}],
+        ['sc7', 'reverse',    {IN_PIPE=>$in_comments2},
+         {OUT=>"3	 #foo\n" .
+          "5#xxx	bar\n" .
+          "7	;baz\n"}],
+        ['sc8', '-C reverse', {IN_PIPE=>$in_comments2}, {OUT=>"5	bar\n"}],
+
+        # Test -C/--skip-comments option. Need to make sure we ignore full-line
+        # comments and partial comments. And that we treat trailing whitespace
+        # properly
+        ['sc9', '-C -W sum 2',   {IN_PIPE=>$in_comments3}, {OUT=>"9\n"}],
+        ['sc10', '-C -W reverse', {IN_PIPE=>$in_comments3},
+         {OUT=> "5	bar\n" .
+          "4	bbb\n" }],
+        ['sc11', '-C -W transpose', {IN_PIPE=>$in_trailing_whitespace},
+         {OUT=> <<'EOF'
+bar	bbb
+5	4
+EOF
+         }] );
+}
+
+
 
 my $save_temps = $ENV{SAVE_TEMPS};
 my $verbose = $ENV{VERBOSE};
