@@ -211,7 +211,7 @@ EOF
      '-v rmdup x',
      {IN_PIPE => $in_basic},
      {OUT     => <<'EOF'
-#x y z
+# x y z
 4 2 3
 - 8 9
 EOF
@@ -221,10 +221,21 @@ EOF
      '-v rmdup y',
      {IN_PIPE => $in_basic},
      {OUT     => <<'EOF'
-#x y z
+# x y z
 4 2 3
-4 - 6# comment
+4 - 6
 - 8 9
+EOF
+}],
+
+    ['reverse',
+     '-v reverse',
+     {IN_PIPE => $in_basic},
+     {OUT     => <<'EOF'
+# z y x
+3 2 4
+6 - 4
+9 8 -
 EOF
 }],
 
@@ -273,6 +284,64 @@ EOF
 EOF
      }]
 );
+
+my $in_xy = <<'EOF';
+# x y
+1 0.5
+2 1
+3 1.5
+4 2
+EOF
+
+@Tests =
+  ( @Tests,
+
+    ['pcov',
+     '-v pcov x:x pcov x:y pcov y:y',
+     {IN_PIPE => $in_xy},
+     {OUT     => <<'EOF'
+# pcov(x,x) pcov(x,y) pcov(y,y)
+1.25 0.625 0.3125
+EOF
+     }],
+
+    # transpose isn't handled in any special way. The result is not a vnl
+    ['transpose',
+     '-v transpose',
+     {IN_PIPE => $in_xy},
+     {OUT     => <<'EOF'
+1 2 3 4
+0.5 1 1.5 2
+EOF
+     }],
+
+    # crosstab isn't handled in any special way. The result is not a vnl
+    ['crosstab1',
+     '-v crosstab x,y',
+     {IN_PIPE => $in_xy},
+     {OUT     => <<'EOF'
+# GroupBy(x) GroupBy(y) count(x)
+ 0.5 1 1.5 2
+1 1 - - -
+2 - 1 - -
+3 - - 1 -
+4 - - - 1
+EOF
+     }],
+    ['crosstab2',
+     '-v crosstab x,y sum y',
+     {IN_PIPE => $in_xy},
+     {OUT     => <<'EOF'
+# GroupBy(x) GroupBy(y) sum(y)
+ 0.5 1 1.5 2
+1 0.5 - - -
+2 - 1 - -
+3 - - 1.5 -
+4 - - - 2
+EOF
+     }],
+
+  );
 
 
 my $save_temps = $ENV{SAVE_TEMPS};
